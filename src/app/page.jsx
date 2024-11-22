@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import Upscaler from "upscaler";
 import * as tf from "@tensorflow/tfjs";
-import NextImage from "next/image"; // Rename the import to avoid conflict with native Image constructor
+import NextImage from "next/image"; // Renaming the image import to avoid conflict
 
 export default function Home() {
   const [image, setImage] = useState(null);
@@ -12,12 +12,11 @@ export default function Home() {
   useEffect(() => {
     const initBackend = async () => {
       try {
-        await tf.setBackend("webgl");
+        await tf.setBackend("cpu"); // Force TensorFlow to use CPU
         await tf.ready();
+        console.log("TensorFlow CPU backend initialized.");
       } catch (error) {
-        console.warn("WebGL not supported or failed, falling back to CPU:", error);
-        await tf.setBackend("cpu");
-        await tf.ready();
+        console.warn("Error initializing CPU backend:", error);
       }
     };
     initBackend();
@@ -27,21 +26,30 @@ export default function Home() {
     const file = event.target.files[0];
     const reader = new FileReader();
     reader.onload = (e) => {
-      const img = new Image(); // Correct way to call the Image constructor with 'new'
-      img.onload = () => {
-        // Resize the image if it's too large
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const maxWidth = 1024; // for example, limit width to 1024px
-        const scale = maxWidth / img.width;
-        canvas.width = maxWidth;
-        canvas.height = img.height * scale;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        setImage(canvas.toDataURL());
-      };
-      img.src = e.target.result;
+      try {
+        const img = new Image(); // Correct way to call the Image constructor with 'new'
+        img.onload = () => {
+          try {
+            // Resize the image if it's too large
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const maxWidth = 1024; // Limit width to 1024px
+            const scale = maxWidth / img.width;
+            canvas.width = maxWidth;
+            canvas.height = img.height * scale;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            setImage(canvas.toDataURL()); // Store the image for upscaling
+            console.log("Image loaded and resized.");
+          } catch (resizeError) {
+            console.error("Error resizing the image:", resizeError);
+          }
+        };
+        img.src = e.target.result; // Read the image data
+      } catch (error) {
+        console.error("Error loading the image:", error);
+      }
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(file); // Start reading the file
   };
 
   const upscaleImage = async () => {
@@ -52,6 +60,7 @@ export default function Home() {
         scale: 2,
       });
       setUpscaledImage(upscaled);
+      console.log("Image upscaled successfully.");
     } catch (error) {
       console.error("Error during upscaling:", error.message, error.stack);
     }
